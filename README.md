@@ -4,26 +4,3 @@
 
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/sairishigangarapus-projects/v0-boolean-simplification-tool)
 
-## Overview
-
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
-
-## Deployment
-
-Your project is live at:
-
-**[https://vercel.com/sairishigangarapus-projects/v0-boolean-simplification-tool](https://vercel.com/sairishigangarapus-projects/v0-boolean-simplification-tool)**
-
-## Build your app
-
-Continue building your app on:
-
-**[https://v0.app/chat/projects/xjB5E50sWpy](https://v0.app/chat/projects/xjB5E50sWpy)**
-
-## How It Works
-
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
