@@ -1,5 +1,8 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+
 export type FavoriteItem = {
   id: string
   title?: string
@@ -10,7 +13,63 @@ export type FavoriteItem = {
   meta?: Record<string, any>
 }
 
-const STORAGE_KEY = "esa_favorites_v1"
+const LOCAL_STORAGE_KEY = "esa_favorites_v1"
+
+export function useFavoritesWithUser() {
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([])
+  const [user, setUser] = useState<{ id: string } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const supabase = getSupabaseBrowserClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        setUser(user ? { id: user.id } : null)
+
+        if (user) {
+          // Load from Supabase
+          const { data, error } = await supabase.from("user_favorites").select("*").eq("user_id", user.id)
+
+          if (error) {
+            console.error("[v0] Error loading favorites:", error)
+            // Fall back to localStorage if Supabase fails
+            const local = safeParse<FavoriteItem[]>(
+              typeof window !== "undefined" ? window.localStorage.getItem(LOCAL_STORAGE_KEY) : null,
+              [],
+            )
+            setFavorites(local)
+          } else {
+            const items: FavoriteItem[] =
+              data?.map((row: any) => ({
+                id: row.problem_id,
+                ...row.item_data,
+              })) || []
+            setFavorites(items)
+          }
+        } else {
+          // Not logged in - use localStorage
+          const local = safeParse<FavoriteItem[]>(
+            typeof window !== "undefined" ? window.localStorage.getItem(LOCAL_STORAGE_KEY) : null,
+            [],
+          )
+          setFavorites(local)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to load favorites:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadFavorites()
+  }, [])
+
+  return { favorites, user, isLoading }
+}
 
 function safeParse<T>(s: string | null, fallback: T): T {
   if (!s) return fallback
@@ -23,7 +82,7 @@ function safeParse<T>(s: string | null, fallback: T): T {
 
 export function getFavorites(): FavoriteItem[] {
   if (typeof window === "undefined") return []
-  return safeParse<FavoriteItem[]>(window.localStorage.getItem(STORAGE_KEY), [])
+  return safeParse<FavoriteItem[]>(window.localStorage.getItem(LOCAL_STORAGE_KEY), [])
 }
 
 export function isFavorite(id: string): boolean {
@@ -32,20 +91,69 @@ export function isFavorite(id: string): boolean {
   return favs.some((f) => f.id === id)
 }
 
-export function addFavorite(item: FavoriteItem) {
+export async function addFavorite(item: FavoriteItem) {
   if (typeof window === "undefined") return
-  const favs = getFavorites()
-  if (favs.find((f) => f.id === item.id)) return
-  const next = [item, ...favs]
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+
+  const supabase = getSupabaseBrowserClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (user) {
+    // Add to Supabase
+    const { error } = await supabase.from("user_favorites").insert({
+      user_id: user.id,
+      problem_id: item.id,
+      item_data: item,
+    })
+
+    if (error) {
+      console.error("[v0] Error adding favorite:", error)
+      // Fall back to localStorage
+      const favs = getFavorites()
+      if (!favs.find((f) => f.id === item.id)) {
+        const next = [item, ...favs]
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next))
+      }
+    }
+  } else {
+    // Add to localStorage
+    const favs = getFavorites()
+    if (!favs.find((f) => f.id === item.id)) {
+      const next = [item, ...favs]
+      window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next))
+    }
+  }
+
   window.dispatchEvent(new CustomEvent("favorites:changed"))
 }
 
-export function removeFavorite(id: string) {
+export async function removeFavorite(id: string) {
   if (typeof window === "undefined") return
-  const favs = getFavorites()
-  const next = favs.filter((f) => f.id !== id)
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+
+  const supabase = getSupabaseBrowserClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (user) {
+    // Remove from Supabase
+    const { error } = await supabase.from("user_favorites").delete().eq("user_id", user.id).eq("problem_id", id)
+
+    if (error) {
+      console.error("[v0] Error removing favorite:", error)
+      // Fall back to localStorage
+      const favs = getFavorites()
+      const next = favs.filter((f) => f.id !== id)
+      window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next))
+    }
+  } else {
+    // Remove from localStorage
+    const favs = getFavorites()
+    const next = favs.filter((f) => f.id !== id)
+    window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next))
+  }
+
   window.dispatchEvent(new CustomEvent("favorites:changed"))
 }
 

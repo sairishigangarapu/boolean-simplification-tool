@@ -36,19 +36,7 @@ export default function Page() {
       })
       if (error) throw error
 
-      const { data: sessionData } = await supabase.auth.getSession()
-      const access_token = sessionData.session?.access_token
-      const refresh_token = sessionData.session?.refresh_token
-
-      if (access_token && refresh_token) {
-        await fetch("/auth/refresh", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token, refresh_token }),
-        })
-      }
-
-      router.replace("/protected")
+      router.replace("/")
       router.refresh()
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")
