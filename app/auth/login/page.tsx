@@ -30,9 +30,6 @@ export default function Page() {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
       })
       if (error) throw error
 

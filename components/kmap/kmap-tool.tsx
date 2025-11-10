@@ -10,7 +10,7 @@ type CellState = "0" | "1" | "X"
 const VAR_LETTERS = ["A", "B", "C", "D", "E", "F"] as const
 
 function grayCode(bits: number): string[] {
-  if (bits <= 0) return [""] // length 1 sequence of empty string
+  if (bits <= 0) return [""]
   let seq = ["0", "1"]
   for (let b = 2; b <= bits; b++) {
     const rev = [...seq].reverse()
@@ -25,7 +25,6 @@ function grayToBinary(gray: string): string {
   for (let i = 1; i < gray.length; i++) {
     const prev = binary[i - 1]
     const g = gray[i]
-    // XOR previous binary with current gray bit
     binary += prev === g ? "0" : "1"
   }
   return binary
@@ -36,7 +35,6 @@ function indexFromBits(bits: string): number {
 }
 
 function canonicalProduct(bits: string, n: number): string {
-  // bits length should be n
   const out: string[] = []
   for (let i = 0; i < n; i++) {
     const letter = VAR_LETTERS[i]
@@ -47,6 +45,104 @@ function canonicalProduct(bits: string, n: number): string {
 
 function makeGrid(rows: number, cols: number): CellState[][] {
   return Array.from({ length: rows }, () => Array.from({ length: cols }, () => "0"))
+}
+
+function findPrimeImplicants(minterms: number[], nVars: number): string[] {
+  if (minterms.length === 0) return []
+  const total = 1 << nVars
+  if (minterms.length === total) return ["1"]
+
+  const primes: string[] = []
+  let groups: Map<number, string[]> = new Map()
+
+  // Initial grouping by bit count
+  for (const m of minterms) {
+    const bits = m.toString(2).padStart(nVars, "0")
+    const count = bits.split("1").length - 1
+    if (!groups.has(count)) groups.set(count, [])
+    groups.get(count)!.push(bits)
+  }
+
+  let iteration = 0
+  const maxIterations = nVars
+
+  while (iteration < maxIterations) {
+    const nextGroups: Map<number, string[]> = new Map()
+    const groupKeys = Array.from(groups.keys()).sort((a, b) => a - b)
+    let merged = false
+
+    for (let i = 0; i < groupKeys.length - 1; i++) {
+      const key1 = groupKeys[i]
+      const key2 = groupKeys[i + 1]
+      if (key2 - key1 !== 1) continue
+
+      const group1 = groups.get(key1) || []
+      const group2 = groups.get(key2) || []
+      const used = new Set<string>()
+
+      for (const term1 of group1) {
+        for (const term2 of group2) {
+          let diffCount = 0
+          let diffIdx = -1
+          for (let j = 0; j < term1.length; j++) {
+            if (term1[j] !== term2[j]) {
+              diffCount++
+              diffIdx = j
+            }
+          }
+
+          if (diffCount === 1) {
+            const mergedTerm = term1.substring(0, diffIdx) + "X" + term1.substring(diffIdx + 1)
+            if (!nextGroups.get(key1)) nextGroups.set(key1, [])
+            if (!nextGroups.get(key1)!.includes(mergedTerm)) {
+              nextGroups.get(key1)!.push(mergedTerm)
+            }
+            used.add(term1)
+            used.add(term2)
+            merged = true
+          }
+        }
+      }
+
+      for (const term of group1) {
+        if (!used.has(term)) {
+          primes.push(term)
+        }
+      }
+    }
+
+    if (!merged) {
+      for (const group of groups.values()) {
+        for (const term of group) {
+          primes.push(term)
+        }
+      }
+      break
+    }
+
+    groups = nextGroups
+    iteration++
+  }
+
+  return primes
+}
+
+function formatMinimized(primes: string[]): string {
+  if (primes.length === 0) return "0"
+  if (primes.includes("1")) return "1"
+
+  const terms = primes.map((bits) => {
+    const out: string[] = []
+    for (let i = 0; i < bits.length; i++) {
+      if (bits[i] !== "X") {
+        const letter = VAR_LETTERS[i]
+        out.push(bits[i] === "1" ? letter : `${letter}'`)
+      }
+    }
+    return out.join("") || "1"
+  })
+
+  return terms.join(" + ") || "0"
 }
 
 export default function KMapTool() {
@@ -62,11 +158,8 @@ export default function KMapTool() {
 
   const [grid, setGrid] = useState<CellState[][]>(() => makeGrid(rows, cols))
 
-  // Reset grid when variable count changes
-  // This keeps implementation simple for now
   const resetGridToVars = () => setGrid(makeGrid(rows, cols))
 
-  // Update grid when nVars changes
   useMemo(() => {
     resetGridToVars()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,7 +196,6 @@ export default function KMapTool() {
     if (onesMinterms.length === 0) return "0"
     if (onesMinterms.length === total) return "1"
 
-    // Canonical SOP (sum of minterms). Does not perform minimization/grouping yet.
     const terms = onesMinterms.map((m) => {
       const bits = m.toString(2).padStart(nVars, "0")
       return canonicalProduct(bits, nVars)
@@ -111,9 +203,14 @@ export default function KMapTool() {
     return terms.join(" + ")
   }, [onesMinterms, nVars])
 
+  const minimizedExpression = useMemo(() => {
+    const primes = findPrimeImplicants(onesMinterms, nVars)
+    return formatMinimized(primes)
+  }, [onesMinterms, nVars])
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(expressionSOP)
+      await navigator.clipboard.writeText(minimizedExpression)
     } catch {
       // no-op
     }
@@ -157,7 +254,7 @@ export default function KMapTool() {
           <Button variant="outline" onClick={resetGridToVars}>
             Reset
           </Button>
-          <Button onClick={handleCopy}>Copy Expression</Button>
+          <Button onClick={handleCopy}>Copy Minimized</Button>
         </div>
       </div>
 
@@ -202,14 +299,23 @@ export default function KMapTool() {
       </Card>
 
       {/* Expression output */}
-      <section aria-labelledby="output-heading" className="space-y-2">
-        <h2 id="output-heading" className="text-lg font-semibold">
-          Canonical SOP (Sum of Minterms)
-        </h2>
-        <p className="rounded-md border border-border bg-popover p-3 font-mono text-sm">{expressionSOP}</p>
-        <p className="text-sm text-muted-foreground">
-          Note: This is the canonical form. Minimization/grouping is not yet applied.
-        </p>
+      <section aria-labelledby="output-heading" className="space-y-4">
+        <div className="space-y-2">
+          <h2 id="output-heading" className="text-lg font-semibold">
+            Canonical SOP (Sum of Minterms)
+          </h2>
+          <p className="rounded-md border border-border bg-popover p-3 font-mono text-sm">{expressionSOP}</p>
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold">Minimized Expression</h2>
+          <p className="rounded-md border border-border bg-primary/10 p-3 font-mono text-sm font-semibold text-primary">
+            {minimizedExpression}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Simplified using Quine-McCluskey algorithm. Don't care terms (X) are used for optimization.
+          </p>
+        </div>
       </section>
     </div>
   )

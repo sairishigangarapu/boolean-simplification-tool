@@ -19,7 +19,10 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  const redirectTo = process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL || process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL
+  const redirectTo =
+    process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL ||
+    process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+    window?.location?.origin
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,7 +41,7 @@ export default function Page() {
         email,
         password,
         options: {
-          emailRedirectTo: redirectTo,
+          emailRedirectTo: `${redirectTo}`,
         },
       })
       if (error) throw error
