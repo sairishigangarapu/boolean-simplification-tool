@@ -21,7 +21,13 @@ function genProblem(): Problem {
     { prompt: "Simplify F(A,B) = AB' + A'B' + AB", answer: "A + B'" },
   ]
   const p = patterns[Math.floor(Math.random() * patterns.length)]
-  return { id: crypto.randomUUID(), ...p }
+  // Generate UUID using browser crypto API
+  const uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === "x" ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+  return { id: uuid, ...p }
 }
 
 export default function PracticePage() {
